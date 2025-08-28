@@ -110,11 +110,11 @@ def proses_gambar(images):
 
         col1, col2 = st.columns(2)
         with col1:
-            st.image(img_rgb, caption="Gambar Asli", use_container_width=True)
-            st.image(hasil_segmentasi, caption="Segmentasi HSV", use_container_width=True)
+            st.image(img_rgb, caption="Gambar Asli", use_column_width=True)
+            st.image(hasil_segmentasi, caption="Segmentasi HSV", use_column_width=True)
         with col2:
-            st.image(filtered, caption="Filtering Hijau (KMeans)", use_container_width=True)
-            st.image(img_resized, caption="Input Model (224x224)", use_container_width=True)
+            st.image(filtered, caption="Filtering Hijau (KMeans)", use_column_width=True)
+            st.image(img_resized, caption="Input Model (224x224)", use_column_width=True)
         st.markdown("---")
 
 if menu == "📤 Upload Gambar":
