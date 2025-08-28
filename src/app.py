@@ -101,10 +101,18 @@ st.title("🌾 Klasifikasi Penyakit Daun Padi")
 menu = st.sidebar.radio("Pilih Input:", ["📤 Upload Gambar", "📸 Kamera"])
 
 def proses_gambar(images):
+    """
+    Menerima list objek file gambar (dari st.file_uploader atau st.camera_input),
+    lalu menampilkan hasil prediksi dan visualisasi langkah-langkah preprocessing.
+    """
     for img in images:
+        # Buka dan konversi ke RGB
         img_rgb = np.array(Image.open(img).convert("RGB"))
+
+        # Jalankan pipeline prediksi
         label, confidence, hasil_segmentasi, filtered, img_resized = predict_image(img_rgb)
 
+        # Tampilkan hasil
         st.subheader(f"📌 Hasil Prediksi: **{label}**")
         st.write(f"Confidence: {confidence:.2%}")
 
@@ -114,7 +122,8 @@ def proses_gambar(images):
             st.image(hasil_segmentasi, caption="Segmentasi HSV", use_column_width=True)
         with col2:
             st.image(filtered, caption="Filtering Hijau (KMeans)", use_column_width=True)
-            st.image(img_resized, caption="Input Model (224x224)", use_column_width=True)
+            st.image(img_resized, caption="Input Model (224×224)", use_column_width=True)
+
         st.markdown("---")
 
 if menu == "📤 Upload Gambar":
