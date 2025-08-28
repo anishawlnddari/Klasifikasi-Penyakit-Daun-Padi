@@ -6,13 +6,12 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from PIL import Image
 
-# --- page config HARUS di sini ---
+# --- PASTI HANYA INI YANG PERTAMA ---
 st.set_page_config(page_title="Klasifikasi Penyakit Daun Padi", layout="wide")
 
-# --- lanjutkan kode lainnya ---
+# --- import fungsi & konstanta ---
 from preprocessing import resize_image, segmentasi_penyakit, remove_green_kmeans
-...
-# --- konstanta ---
+
 CLASS_NAMES = [
     "Bacterial Leaf Blight",
     "Brown Spot",
@@ -24,18 +23,14 @@ CLASS_NAMES = [
     "Sheath Blight"
 ]
 
-# --- load model (cached) ---
 @st.cache_resource
 def load_model_once():
     return tf.keras.models.load_model("src/model/best_model_finetune.h5")
 
 model = load_model_once()
 
-# --- judul aplikasi ---
-st.set_page_config(page_title="Klasifikasi Penyakit Daun Padi", layout="wide")
 st.title("🌾 Klasifikasi Penyakit Daun Padi")
 
-# --- tab menu ---
 tab1, tab2 = st.tabs(["📂 Upload Gambar", "📷 Kamera"])
 
 # --- fungsi utama ---
