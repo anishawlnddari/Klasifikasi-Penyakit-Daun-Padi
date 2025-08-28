@@ -1,0 +1,63 @@
+import cv2
+import numpy as np
+import streamlit as st
+import tensorflow as tf
+
+# Import fungsi dari preprocessing.py
+from preprocessing import resize_image, segmentasi_penyakit, remove_green_kmeans
+
+# === Load Model ===
+@st.cache_resource
+def load_model():
+    model = tf.keras.models.load_model("src/model/best_model_finetune.h5")# ganti sesuai path model
+    return model
+
+model = load_model()
+
+# === Kelas penyakit ===
+CLASS_NAMES = [
+    "Bacterial Leaf Blight",
+    "Brown Spot",
+    "Healthy Rice Leaf",
+    "Leaf Blast",
+    "Leaf scald",
+    "Narrow Brown Leaf Spot",
+    "Rice Hispa",
+    "Sheath Blight"
+]
+
+st.title("🌾 Klasifikasi Penyakit Daun Padi")
+
+uploaded_file = st.file_uploader("Upload gambar daun", type=["jpg","jpeg","png"])
+
+if uploaded_file is not None:
+    # Baca gambar
+    file_bytes = np.asarray(bytearray(uploaded_file.read()), dtype=np.uint8)
+    img_bgr = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
+
+    # === Preprocessing (tanpa ditampilkan) ===
+    resized_bgr = resize_image(img_bgr, (224,224))
+    _, seg_hsv = segmentasi_penyakit(resized_bgr)
+    img_rgb = cv2.cvtColor(seg_hsv, cv2.COLOR_BGR2RGB)
+    kmeans_result, _ = remove_green_kmeans(img_rgb, k=3)
+
+    # === Prediksi ===
+    input_tensor = np.expand_dims(kmeans_result, axis=0) / 255.0
+    preds = model.predict(input_tensor)
+    predicted_class = CLASS_NAMES[np.argmax(preds)]
+    confidence = np.max(preds) * 100
+
+    # === Output ke user ===
+    st.image(cv2.cvtColor(resized_bgr, cv2.COLOR_BGR2RGB), caption="Gambar Input", use_column_width=True)
+    st.success(f"✅ Prediksi: **{predicted_class}** dengan tingkat keyakinan **{confidence:.2f}%**")
+
+    # === Opsi: tampilkan detail preprocessing ===
+    if st.checkbox("Tampilkan detail preprocessing"):
+        mask_hsv, seg_hsv = segmentasi_penyakit(resized_bgr)
+        _, kmeans_mask = remove_green_kmeans(img_rgb, k=3)
+
+        st.subheader("Hasil Tahap per Tahap")
+        st.image(mask_hsv, caption="Mask HSV Penyakit", use_column_width=True, channels="GRAY")
+        st.image(cv2.cvtColor(seg_hsv, cv2.COLOR_BGR2RGB), caption="Segmentasi HSV Penyakit", use_column_width=True)
+        st.image(kmeans_mask*255, caption="Mask KMeans (Non-hijau)", use_column_width=True, channels="GRAY")
+        st.image(kmeans_result, caption="Hasil KMeans (Hijau dibuang)", use_column_width=True)

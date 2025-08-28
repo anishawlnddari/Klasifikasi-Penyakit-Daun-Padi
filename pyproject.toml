@@ -1,0 +1,15 @@
+[project]
+name = "klasifikasi_penyakit_daun_padi"
+version = "0.1.0"
+description = "Default template for PDM package"
+authors = [
+    { name = "anishawlnddari", email = "anishawulandarip@gmail.com" },
+]
+dependencies = ["streamlit>=1.49.0", "tensorflow>=2.20.0", "pillow>=11.3.0", "numpy>=2.3.2", "scikit-learn>=1.7.1", "matplotlib>=3.10.5", "opencv-python>=4.11.0.86"]
+
+requires-python = "==3.11.*"
+readme = "README.md"
+license = { text = "MIT" }
+
+[tool.pdm]
+distribution = false

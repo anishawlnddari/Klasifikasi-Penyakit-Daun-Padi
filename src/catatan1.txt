@@ -1,0 +1,33 @@
+import cv2
+import numpy as np
+import streamlit as st
+
+# Import fungsi dari preprocessing.py
+from preprocessing import resize_image, segmentasi_penyakit, remove_green_kmeans
+
+st.title("Klasifikasi Penyakit Daun Padi")
+
+uploaded_file = st.file_uploader("Upload gambar daun", type=["jpg","jpeg","png"])
+
+if uploaded_file is not None:
+    # Baca gambar
+    file_bytes = np.asarray(bytearray(uploaded_file.read()), dtype=np.uint8)
+    img_bgr = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
+
+    # Step 1: Resize
+    resized_bgr = resize_image(img_bgr, (224,224))
+
+    # Step 2: Segmentasi HSV
+    mask_hsv, seg_hsv = segmentasi_penyakit(resized_bgr)
+
+    # Step 3: KMeans Filtering Hijau
+    img_rgb = cv2.cvtColor(seg_hsv, cv2.COLOR_BGR2RGB)
+    kmeans_result, kmeans_mask = remove_green_kmeans(img_rgb, k=3)
+
+    # Tampilkan hasil
+    st.subheader("Hasil Tahap per Tahap")
+    st.image(cv2.cvtColor(resized_bgr, cv2.COLOR_BGR2RGB), caption="Step 1: Resize 224x224", use_column_width=True)
+    st.image(mask_hsv, caption="Step 2: Mask HSV Penyakit", use_column_width=True, channels="GRAY")
+    st.image(cv2.cvtColor(seg_hsv, cv2.COLOR_BGR2RGB), caption="Step 2: Segmentasi HSV Penyakit", use_column_width=True)
+    st.image(kmeans_mask*255, caption="Step 3: Mask KMeans (Non-hijau)", use_column_width=True, channels="GRAY")
+    st.image(kmeans_result, caption="Step 3: Hasil KMeans (Hijau dibuang)", use_column_width=True)

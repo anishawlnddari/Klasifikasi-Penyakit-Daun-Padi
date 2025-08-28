@@ -1,0 +1,87 @@
+import cv2
+import numpy as np
+import streamlit as st
+import tensorflow as tf
+import pandas as pd
+import matplotlib.pyplot as plt
+
+# Import fungsi dari preprocessing.py
+from preprocessing import resize_image, segmentasi_penyakit, remove_green_kmeans
+
+# === Kelas penyakit ===
+CLASS_NAMES = [
+    "Bacterial Leaf Blight",
+    "Brown Spot",
+    "Healthy Rice Leaf",
+    "Leaf Blast",
+    "Leaf Scald",
+    "Narrow Brown Leaf Spot",
+    "Rice Hispa",
+    "Sheath Blight"
+]
+
+# === Load Model ===
+@st.cache_resource
+def load_model():
+    model = tf.keras.models.load_model("src/model/best_model_finetune.h5")  
+    return model
+
+model = load_model()
+
+st.title("🌾 Klasifikasi Penyakit Daun Padi")
+
+# --- Input Gambar: Upload atau Kamera ---
+st.sidebar.header("📷 Pilih Input Gambar")
+input_method = st.sidebar.radio("Pilih sumber gambar:", ["Upload File", "Kamera"])
+
+uploaded_file = None
+if input_method == "Upload File":
+    uploaded_file = st.file_uploader("Upload gambar daun", type=["jpg","jpeg","png"])
+elif input_method == "Kamera":
+    camera_photo = st.camera_input("Ambil gambar daun dengan kamera")
+    if camera_photo is not None:
+        uploaded_file = camera_photo
+
+if uploaded_file is not None:
+    # Baca gambar
+    file_bytes = np.asarray(bytearray(uploaded_file.read()), dtype=np.uint8)
+    img_bgr = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
+
+    # Step 1: Resize
+    resized_bgr = resize_image(img_bgr, (224,224))
+
+    # Step 2: Segmentasi HSV
+    mask_hsv, seg_hsv = segmentasi_penyakit(resized_bgr)
+
+    # Step 3: KMeans Filtering Hijau
+    img_rgb = cv2.cvtColor(seg_hsv, cv2.COLOR_BGR2RGB)
+    kmeans_result, kmeans_mask = remove_green_kmeans(img_rgb, k=3)
+
+    # === Prediksi ===
+    input_tensor = np.expand_dims(kmeans_result, axis=0) / 255.0
+    preds = model.predict(input_tensor)[0]
+
+    pred_class = CLASS_NAMES[np.argmax(preds)]
+    pred_conf = np.max(preds) * 100
+
+    # === Output Hasil ===
+    st.subheader("📌 Hasil Prediksi")
+    st.success(f"Penyakit Terdeteksi: **{pred_class}** ({pred_conf:.2f}%)")
+
+    # === Tabel Probabilitas ===
+    prob_df = pd.DataFrame({
+        "Penyakit": CLASS_NAMES,
+        "Probabilitas (%)": (preds * 100).round(2)
+    }).sort_values(by="Probabilitas (%)", ascending=False)
+
+    st.subheader("📊 Probabilitas Semua Kelas")
+    st.dataframe(prob_df, use_container_width=True)
+
+    # === Visualisasi Bar Chart ===
+    st.subheader("📈 Visualisasi Probabilitas")
+    fig, ax = plt.subplots(figsize=(8,4))
+    ax.barh(CLASS_NAMES, preds * 100)
+    ax.set_xlabel("Probabilitas (%)")
+    ax.set_title("Prediksi Probabilitas per Kelas")
+    ax.invert_yaxis()  # supaya kelas dengan nilai tertinggi di atas
+    st.pyplot(fig)
