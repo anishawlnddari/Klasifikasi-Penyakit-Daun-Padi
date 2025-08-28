@@ -6,9 +6,12 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from PIL import Image
 
-# --- import fungsi preprocessing ---
-from preprocessing import resize_image, segmentasi_penyakit, remove_green_kmeans
+# --- page config HARUS di sini ---
+st.set_page_config(page_title="Klasifikasi Penyakit Daun Padi", layout="wide")
 
+# --- lanjutkan kode lainnya ---
+from preprocessing import resize_image, segmentasi_penyakit, remove_green_kmeans
+...
 # --- konstanta ---
 CLASS_NAMES = [
     "Bacterial Leaf Blight",
