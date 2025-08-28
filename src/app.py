@@ -1,101 +1,84 @@
 import cv2
 import numpy as np
+from PIL import Image
 import streamlit as st
 import tensorflow as tf
-import pandas as pd
-import matplotlib.pyplot as plt
 
-# Import fungsi dari preprocessing.py
-from preprocessing import resize_image, segmentasi_penyakit, remove_green_kmeans
+# === Load model ===
+# Pastikan file model sudah ada di direktori project (misalnya "model.h5")
+@st.cache_resource
+def load_model():
+    return tf.keras.models.load_model("model.h5")
 
-# === Kelas penyakit ===
+model = load_model()
+
+# === Daftar kelas penyakit ===
 CLASS_NAMES = [
     "Bacterial Leaf Blight",
     "Brown Spot",
     "Healthy Rice Leaf",
     "Leaf Blast",
-    "Leaf Scald",
+    "Leaf scald",
     "Narrow Brown Leaf Spot",
     "Rice Hispa",
     "Sheath Blight"
 ]
 
-# === Load Model ===
-@st.cache_resource
-def load_model():
-    model = tf.keras.models.load_model("src/model/best_model_finetune.h5")  
-    return model
+# === Fungsi prediksi ===
+def predict_image(img_rgb):
+    img_resized = cv2.resize(img_rgb, (224, 224))
+    img_array = np.expand_dims(img_resized, axis=0) / 255.0
+    preds = model.predict(img_array)
+    pred_class = CLASS_NAMES[np.argmax(preds)]
+    confidence = float(np.max(preds))
+    return pred_class, confidence
 
-model = load_model()
-
-st.title("🌾 Klasifikasi Penyakit Daun Padi")
-
-# === Tab Menu ===
-tab1, tab2 = st.tabs(["📂 Upload Gambar", "📷 Kamera"])
-
-def proses_gambar(files_to_process):
-    for idx, uploaded_file in enumerate(files_to_process, start=1):
-        st.markdown(f"## 🖼️ Gambar {idx}")
-
-        # Baca gambar
+# === Fungsi proses banyak gambar ===
+def proses_gambar(uploaded_files):
+    for uploaded_file in uploaded_files[:3]:  # batasi maksimal 3
         file_bytes = np.asarray(bytearray(uploaded_file.read()), dtype=np.uint8)
         img_bgr = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
+
+        if img_bgr is None:
+            st.error(f"Gagal membaca file: {uploaded_file.name}")
+            continue
+
         img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
 
         # Tampilkan gambar asli
         st.image(img_rgb, caption="Gambar Asli", use_container_width=True)
 
-        # Step 1: Resize
-        resized_bgr = resize_image(img_bgr, (224,224))
+        # Prediksi
+        pred_class, confidence = predict_image(img_rgb)
+        st.success(f"Prediksi: **{pred_class}** ({confidence*100:.2f}%)")
 
-        # Step 2: Segmentasi HSV
-        mask_hsv, seg_hsv = segmentasi_penyakit(resized_bgr)
+# === Fungsi proses kamera ===
+def proses_kamera(camera_file):
+    if camera_file is not None:
+        img = Image.open(camera_file)
+        img_rgb = np.array(img)
 
-        # Step 3: KMeans Filtering Hijau
-        img_rgb_seg = cv2.cvtColor(seg_hsv, cv2.COLOR_BGR2RGB)
-        kmeans_result, kmeans_mask = remove_green_kmeans(img_rgb_seg, k=3)
+        st.image(img_rgb, caption="Gambar Kamera", use_container_width=True)
 
-        # === Prediksi ===
-        input_tensor = np.expand_dims(kmeans_result, axis=0) / 255.0
-        preds = model.predict(input_tensor)[0]
+        # Prediksi
+        pred_class, confidence = predict_image(img_rgb)
+        st.success(f"Prediksi: **{pred_class}** ({confidence*100:.2f}%)")
 
-        pred_class = CLASS_NAMES[np.argmax(preds)]
-        pred_conf = np.max(preds) * 100
+# === UI Streamlit ===
+st.title("🌾 Klasifikasi Penyakit Daun Padi")
 
-        # === Output Hasil ===
-        st.subheader("📌 Hasil Prediksi")
-        st.success(f"Penyakit Terdeteksi: **{pred_class}** ({pred_conf:.2f}%)")
+menu = st.sidebar.radio("Pilih Input:", ["Upload Gambar", "Kamera Device"])
 
-        # === Tabel Probabilitas ===
-        prob_df = pd.DataFrame({
-            "Penyakit": CLASS_NAMES,
-            "Probabilitas (%)": (preds * 100).round(2)
-        }).sort_values(by="Probabilitas (%)", ascending=False)
-
-        st.subheader("📊 Probabilitas Semua Kelas")
-        st.dataframe(prob_df, use_container_width=True)
-
-        # === Visualisasi Bar Chart ===
-        st.subheader("📈 Visualisasi Probabilitas")
-        fig, ax = plt.subplots(figsize=(8,4))
-        ax.barh(CLASS_NAMES, preds * 100)
-        ax.set_xlabel("Probabilitas (%)")
-        ax.set_title("Prediksi Probabilitas per Kelas")
-        ax.invert_yaxis()  # supaya kelas tertinggi di atas
-        st.pyplot(fig)
-
-# === Tab 1: Upload Gambar ===
-with tab1:
+if menu == "Upload Gambar":
+    st.subheader("📂 Upload Gambar Daun (max 3 file)")
     uploaded_files = st.file_uploader(
-        "Upload hingga 3 gambar daun (jpg/jpeg/png)", 
-        type=["jpg", "jpeg", "png"], 
-        accept_multiple_files=True
+        "Upload gambar daun", type=["jpg", "jpeg", "png"], accept_multiple_files=True
     )
     if uploaded_files:
-        proses_gambar(uploaded_files[:3])  # batasi maksimal 3
+        proses_gambar(uploaded_files)
 
-# === Tab 2: Kamera ===
-with tab2:
-    camera_file = st.camera_input("Ambil gambar dengan kamera")
+elif menu == "Kamera Device":
+    st.subheader("📸 Ambil Gambar dari Kamera")
+    camera_file = st.camera_input("Ambil gambar daun padi")
     if camera_file:
-        proses_gambar([camera_file])
+        proses_kamera(camera_file)
