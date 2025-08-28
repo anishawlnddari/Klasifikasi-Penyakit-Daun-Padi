@@ -8,7 +8,7 @@ import tensorflow as tf
 # Pastikan file model sudah ada di direktori project (misalnya "model.h5")
 @st.cache_resource
 def load_model():
-    return tf.keras.models.load_model("src\model\best_model_finetune.h5")
+    return tf.keras.models.load_model("src/model/best_model_finetune.h5")
 
 model = load_model()
 
