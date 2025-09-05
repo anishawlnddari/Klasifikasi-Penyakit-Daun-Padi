@@ -6,11 +6,11 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from PIL import Image
 
-# --- PASTI HANYA INI YANG PERTAMA ---
+# --- konfigurasi halaman ---
 st.set_page_config(page_title="Klasifikasi Penyakit Daun Padi", layout="wide")
 
-# --- import fungsi & konstanta ---
-from preprocessing import resize_image, segmentasi_penyakit, remove_green_kmeans
+# --- import fungsi ---
+from preprocessing import resize_image
 
 CLASS_NAMES = [
     "Bacterial Leaf Blight",
@@ -25,11 +25,11 @@ CLASS_NAMES = [
 
 @st.cache_resource
 def load_model_once():
-    return tf.keras.models.load_model("src/model/best_model_finetune.h5")
+    return tf.keras.models.load_model("src/model/best_model_finetune_resize_model.h5")
 
 model = load_model_once()
 
-st.title("🌾 Klasifikasi Penyakit Daun Padi")
+st.title("Klasifikasi Penyakit Daun Padi")
 
 tab1, tab2 = st.tabs(["📂 Upload Gambar", "📷 Kamera"])
 
@@ -38,24 +38,20 @@ def proses_gambar(files_to_process):
     for idx, uploaded_file in enumerate(files_to_process, start=1):
         st.markdown(f"## 🖼️ Gambar {idx}")
 
+        # Baca file
         file_bytes = np.asarray(bytearray(uploaded_file.read()), dtype=np.uint8)
         img_bgr = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
         img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
 
-        st.image(img_rgb, caption="Gambar Asli", use_column_width=True)
+        # Tampilkan gambar kecil
+        st.image(img_rgb, caption="Gambar Asli", width=200)
 
-        # 1) Resize
+        # 1) Resize (224x224)
         resized_bgr = resize_image(img_bgr, (224, 224))
+        resized_rgb = cv2.cvtColor(resized_bgr, cv2.COLOR_BGR2RGB)
 
-        # 2) Segmentasi HSV  -> (mask, hasil)
-        mask_hsv, seg_hsv = segmentasi_penyakit(resized_bgr)
-
-        # 3) KMeans filter hijau  -> (filtered, mask)
-        img_rgb_seg = cv2.cvtColor(seg_hsv, cv2.COLOR_BGR2RGB)
-        kmeans_result, _ = remove_green_kmeans(img_rgb_seg, k=3)
-
-        # 4) Prediksi
-        input_tensor = np.expand_dims(kmeans_result, axis=0) / 255.0
+        # 2) Prediksi
+        input_tensor = np.expand_dims(resized_rgb, axis=0) / 255.0
         preds = model.predict(input_tensor)[0]
 
         pred_class = CLASS_NAMES[np.argmax(preds)]
