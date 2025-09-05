@@ -4,6 +4,7 @@ import streamlit as st
 import tensorflow as tf
 import pandas as pd
 import matplotlib.pyplot as plt
+import time  # untuk logging waktu
 from PIL import Image
 
 # --- konfigurasi halaman ---
@@ -25,7 +26,7 @@ CLASS_NAMES = [
 
 @st.cache_resource
 def load_model_once():
-    return tf.keras.models.load_model("src/model/best_model_finetune_resize_model.h5")
+    return tf.keras.models.load_model("src/model/best_model_finetune.h5")
 
 model = load_model_once()
 
@@ -43,40 +44,52 @@ def proses_gambar(files_to_process):
         img_bgr = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
         img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
 
-        # Tampilkan gambar kecil
-        st.image(img_rgb, caption="Gambar Asli", width=200)
+        # Layout kiri-kanan
+        col1, col2 = st.columns([1, 2])  # kiri lebih kecil, kanan lebih besar
 
-        # 1) Resize (224x224)
-        resized_bgr = resize_image(img_bgr, (224, 224))
-        resized_rgb = cv2.cvtColor(resized_bgr, cv2.COLOR_BGR2RGB)
+        with col1:
+            st.image(img_rgb, caption="Gambar Asli", width=200)
 
-        # 2) Prediksi
-        input_tensor = np.expand_dims(resized_rgb, axis=0) / 255.0
-        preds = model.predict(input_tensor)[0]
+        with col2:
+            # Mulai hitung waktu
+            start_time = time.time()
 
-        pred_class = CLASS_NAMES[np.argmax(preds)]
-        pred_conf = np.max(preds) * 100
+            # 1) Resize (224x224)
+            resized_bgr = resize_image(img_bgr, (224, 224))
+            resized_rgb = cv2.cvtColor(resized_bgr, cv2.COLOR_BGR2RGB)
 
-        st.subheader("📌 Hasil Prediksi")
-        st.success(f"Penyakit Terdeteksi: **{pred_class}** ({pred_conf:.2f}%)")
+            # 2) Prediksi
+            input_tensor = np.expand_dims(resized_rgb, axis=0) / 255.0
+            preds = model.predict(input_tensor, verbose=0)[0]
 
-        # Tabel probabilitas
-        prob_df = pd.DataFrame({
-            "Penyakit": CLASS_NAMES,
-            "Probabilitas (%)": (preds * 100).round(2)
-        }).sort_values(by="Probabilitas (%)", ascending=False)
+            elapsed_time = time.time() - start_time
 
-        st.subheader("📊 Probabilitas Semua Kelas")
-        st.dataframe(prob_df, use_container_width=True)
+            pred_class = CLASS_NAMES[np.argmax(preds)]
+            pred_conf = np.max(preds) * 100
 
-        # Bar chart
-        st.subheader("📈 Visualisasi Probabilitas")
-        fig, ax = plt.subplots(figsize=(8, 4))
-        ax.barh(CLASS_NAMES, preds * 100, color="teal")
-        ax.set_xlabel("Probabilitas (%)")
-        ax.set_title("Prediksi Probabilitas per Kelas")
-        ax.invert_yaxis()
-        st.pyplot(fig)
+            st.subheader("📌 Hasil Prediksi")
+            st.success(f"Penyakit Terdeteksi: **{pred_class}** ({pred_conf:.2f}%)")
+
+            # Logging waktu
+            st.info(f"⚡ Kecepatan respons prediksi: {elapsed_time:.3f} detik")
+
+            # Tabel probabilitas
+            prob_df = pd.DataFrame({
+                "Penyakit": CLASS_NAMES,
+                "Probabilitas (%)": (preds * 100).round(2)
+            }).sort_values(by="Probabilitas (%)", ascending=False)
+
+            st.subheader("📊 Probabilitas Semua Kelas")
+            st.dataframe(prob_df, use_container_width=True)
+
+            # Bar chart
+            st.subheader("📈 Visualisasi Probabilitas")
+            fig, ax = plt.subplots(figsize=(6, 4))
+            ax.barh(CLASS_NAMES, preds * 100, color="teal")
+            ax.set_xlabel("Probabilitas (%)")
+            ax.set_title("Prediksi Probabilitas per Kelas")
+            ax.invert_yaxis()
+            st.pyplot(fig)
 
         st.markdown("---")
 
