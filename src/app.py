@@ -4,15 +4,16 @@ import streamlit as st
 import tensorflow as tf
 import pandas as pd
 import matplotlib.pyplot as plt
-import time  # untuk logging waktu
 from PIL import Image
+import time
 
-# --- konfigurasi halaman ---
+# --- Konfigurasi halaman ---
 st.set_page_config(page_title="Klasifikasi Penyakit Daun Padi", layout="wide")
 
-# --- import fungsi ---
-from preprocessing import resize_image
+# --- import fungsi dari preprocessing.py ---
+from preprocessing import resize_image, segmentasi_penyakit, remove_green_kmeans
 
+# --- Daftar kelas ---
 CLASS_NAMES = [
     "Bacterial Leaf Blight",
     "Brown Spot",
@@ -24,53 +25,64 @@ CLASS_NAMES = [
     "Sheath Blight"
 ]
 
+# --- Load model hanya sekali ---
 @st.cache_resource
 def load_model_once():
     return tf.keras.models.load_model("src/model/best_model_finetune.h5")
 
 model = load_model_once()
 
-st.title("Klasifikasi Penyakit Daun Padi")
+st.title("🌾 Klasifikasi Penyakit Daun Padi")
 
+# --- Tab menu ---
 tab1, tab2 = st.tabs(["📂 Upload Gambar", "📷 Kamera"])
 
-# --- fungsi utama ---
+
+# --- Fungsi utama ---
 def proses_gambar(files_to_process):
     for idx, uploaded_file in enumerate(files_to_process, start=1):
         st.markdown(f"## 🖼️ Gambar {idx}")
 
-        # Baca file
+        # Baca file gambar
         file_bytes = np.asarray(bytearray(uploaded_file.read()), dtype=np.uint8)
         img_bgr = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
         img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
 
         # Layout kiri-kanan
-        col1, col2 = st.columns([1, 2])  # kiri lebih kecil, kanan lebih besar
+        col1, col2 = st.columns([1, 2])
 
         with col1:
             st.image(img_rgb, caption="Gambar Asli", width=200)
 
         with col2:
-            # Mulai hitung waktu
+            # Mulai timer
             start_time = time.time()
 
-            # 1) Resize (224x224)
+            # 1) Resize
             resized_bgr = resize_image(img_bgr, (224, 224))
-            resized_rgb = cv2.cvtColor(resized_bgr, cv2.COLOR_BGR2RGB)
 
-            # 2) Prediksi
-            input_tensor = np.expand_dims(resized_rgb, axis=0) / 255.0
-            preds = model.predict(input_tensor, verbose=0)[0]
+            # 2) Segmentasi HSV -> (mask, hasil)
+            mask_hsv, seg_hsv = segmentasi_penyakit(resized_bgr)
 
+            # 3) KMeans filter hijau -> (filtered, mask)
+            img_rgb_seg = cv2.cvtColor(seg_hsv, cv2.COLOR_BGR2RGB)
+            kmeans_result, _ = remove_green_kmeans(img_rgb_seg, k=3)
+
+            # 4) Prediksi
+            input_tensor = np.expand_dims(kmeans_result, axis=0) / 255.0
+            preds = model.predict(input_tensor)[0]
+
+            # Selesai timer
             elapsed_time = time.time() - start_time
 
+            # Ambil hasil prediksi
             pred_class = CLASS_NAMES[np.argmax(preds)]
             pred_conf = np.max(preds) * 100
 
+            # Tampilkan hasil
             st.subheader("📌 Hasil Prediksi")
             st.success(f"Penyakit Terdeteksi: **{pred_class}** ({pred_conf:.2f}%)")
 
-            # Logging waktu
             st.info(f"⚡ Kecepatan respons prediksi: {elapsed_time:.3f} detik")
 
             # Tabel probabilitas
@@ -84,7 +96,7 @@ def proses_gambar(files_to_process):
 
             # Bar chart
             st.subheader("📈 Visualisasi Probabilitas")
-            fig, ax = plt.subplots(figsize=(6, 4))
+            fig, ax = plt.subplots(figsize=(6, 3))
             ax.barh(CLASS_NAMES, preds * 100, color="teal")
             ax.set_xlabel("Probabilitas (%)")
             ax.set_title("Prediksi Probabilitas per Kelas")
@@ -93,7 +105,8 @@ def proses_gambar(files_to_process):
 
         st.markdown("---")
 
-# --- Tab 1: Upload ---
+
+# --- Tab 1: Upload Gambar ---
 with tab1:
     uploaded_files = st.file_uploader(
         "Upload hingga 3 gambar daun padi (jpg/jpeg/png)",
@@ -101,7 +114,7 @@ with tab1:
         accept_multiple_files=True
     )
     if uploaded_files:
-        proses_gambar(uploaded_files[:3])  # maks 3
+        proses_gambar(uploaded_files[:3])  # batasi max 3 gambar
 
 # --- Tab 2: Kamera ---
 with tab2:
